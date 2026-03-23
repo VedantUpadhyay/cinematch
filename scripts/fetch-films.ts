@@ -182,7 +182,7 @@ async function loadTmdbApiKey() {
 async function fetchTmdbJson<T>(
   apiKey: string,
   pathname: string,
-  params: Record<string, string | number>,
+  params: Record<string, string | number | boolean>,
 ): Promise<T> {
   const url = new URL(`${TMDB_BASE_URL}${pathname}`)
   url.searchParams.set('api_key', apiKey)
@@ -229,7 +229,7 @@ function takeIds(response: TmdbListResponse, limit: number) {
 async function fetchPagedIds(
   apiKey: string,
   pathname: string,
-  baseParams: Record<string, string | number>,
+  baseParams: Record<string, string | number | boolean>,
   pages: number,
   maxItems: number,
 ) {

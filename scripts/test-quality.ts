@@ -47,10 +47,6 @@ type TestCase = {
   pairWith?: string
 }
 
-type ApiSuccessResponse = {
-  recommendations: Recommendation[]
-}
-
 type RawResult = {
   name: string
   profile: ProfilePayload
@@ -300,11 +296,15 @@ const tests: TestCase[] = [
   },
 ]
 
-const varianceProfile = tests.find((test) => test.name.startsWith('T3:'))?.profile
+const varianceProfileCandidate = tests.find((test) =>
+  test.name.startsWith('T3:'),
+)?.profile
 
-if (!varianceProfile) {
+if (!varianceProfileCandidate) {
   throw new Error('Variance profile could not be resolved from the test set.')
 }
+
+const varianceProfile: ProfilePayload = varianceProfileCandidate
 
 const delayMs = 8000
 

@@ -1,4 +1,5 @@
-import buildPrompt from '../src/lib/buildPrompt.js'
+import buildExplanationPrompt from '../src/lib/buildPrompt.js'
+import { getTopFilms, type ScoredFilm } from '../src/lib/scoringEngine.js'
 import type { Recommendation, UserProfile } from '../src/types.js'
 
 export const config = {
@@ -18,6 +19,7 @@ const strictRetrySuffix = [
   'The JSON must contain exactly one key: "recommendations".',
   'That array must contain exactly 5 items.',
   'Every item must include title, year, genre, tagline, why, and axisScores with all five numeric axis values.',
+  'Use the exact same 5 films provided to you and keep the same order.',
 ].join(' ')
 
 const groqResponseFormat = {
@@ -77,6 +79,16 @@ class ModelOutputError extends Error {}
 
 function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function normalizeTitle(value: string) {
+  return value
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[’'"`]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, ' ')
+    .trim()
+    .toLowerCase()
 }
 
 function jsonResponse(body: unknown, status = 200) {
@@ -143,9 +155,41 @@ function isRecommendation(value: unknown): value is Recommendation {
   )
 }
 
+function toFallbackTagline(film: ScoredFilm) {
+  const firstSentence = film.overview
+    .replace(/\s+/g, ' ')
+    .split(/(?<=[.!?])\s+/)[0]
+    ?.trim()
+
+  if (firstSentence && firstSentence.length > 0) {
+    return firstSentence
+  }
+
+  return `${film.genres[0] ?? 'Film'} match selected for your current profile.`
+}
+
+function buildFallbackRecommendations(
+  profile: UserProfile,
+  selectedFilms: ScoredFilm[],
+): Recommendation[] {
+  const why =
+    profile.copingStyle === null
+      ? 'Selected based on your psychological profile match.'
+      : `Selected based on your psychological profile match, especially your ${profile.mood} + ${profile.copingStyle} mood-regulation preference.`
+
+  return selectedFilms.map((film) => ({
+    title: film.title,
+    year: film.year,
+    genre: film.genres[0] ?? 'Drama',
+    tagline: toFallbackTagline(film),
+    why,
+    axisScores: film.scores,
+  }))
+}
+
 function parseRecommendations(
   payload: unknown,
-  profile: UserProfile,
+  selectedFilms: ScoredFilm[],
 ): Recommendation[] {
   if (
     !isObject(payload) ||
@@ -158,42 +202,38 @@ function parseRecommendations(
     )
   }
 
-  const normalizedGenres = payload.recommendations.map((recommendation) =>
-    recommendation.genre.trim().toLowerCase(),
+  const selectedByTitle = new Map(
+    selectedFilms.map((film) => [normalizeTitle(film.title), film]),
   )
-  const uniqueGenres = new Set(normalizedGenres)
+  const matchedTitles = new Set<string>()
+  const recommendations = payload.recommendations.map((recommendation) => {
+    const matchedFilm = selectedByTitle.get(normalizeTitle(recommendation.title))
 
-  if (uniqueGenres.size !== payload.recommendations.length) {
-    throw new ModelOutputError(
-      'Model response failed the genre-diversity requirement.',
-    )
-  }
-
-  const decades = new Set(
-    payload.recommendations.map((recommendation) =>
-      Math.floor(recommendation.year / 10),
-    ),
-  )
-
-  if (decades.size < 3) {
-    throw new ModelOutputError(
-      'Model response failed the decade-diversity requirement.',
-    )
-  }
-
-  if (profile.hedonic > 0.5) {
-    const punishingGenres = normalizedGenres.filter((genre) =>
-      ['horror', 'tragedy', 'misery drama'].includes(genre),
-    )
-
-    if (punishingGenres.length >= 3) {
+    if (!matchedFilm) {
       throw new ModelOutputError(
-        'Model response over-indexed on punishing genres for a hedonic-leaning profile.',
+        `Model returned a film that was not in the pre-selected set: ${recommendation.title}.`,
       )
     }
+
+    matchedTitles.add(normalizeTitle(recommendation.title))
+
+    return {
+      title: matchedFilm.title,
+      year: matchedFilm.year,
+      genre: matchedFilm.genres[0] ?? recommendation.genre,
+      tagline: recommendation.tagline,
+      why: recommendation.why,
+      axisScores: recommendation.axisScores,
+    }
+  })
+
+  if (matchedTitles.size !== selectedFilms.length) {
+    throw new ModelOutputError(
+      'Model did not return explanations for the exact 5 selected films.',
+    )
   }
 
-  return payload.recommendations
+  return recommendations
 }
 
 function extractProviderError(payload: unknown): string | null {
@@ -288,8 +328,8 @@ async function getGroqApiKey(): Promise<string | null> {
 
 async function callGroq(
   apiKey: string,
-  profile: UserProfile,
   messages: GroqMessage[],
+  selectedFilms: ScoredFilm[],
   temperature: number,
 ): Promise<Recommendation[]> {
   const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -334,7 +374,7 @@ async function callGroq(
     throw new ModelOutputError('Groq returned invalid JSON content.')
   }
 
-  return parseRecommendations(parsed, profile)
+  return parseRecommendations(parsed, selectedFilms)
 }
 
 export default async function handler(request: Request) {
@@ -364,36 +404,39 @@ export default async function handler(request: Request) {
     )
   }
 
+  const selectedFilms = getTopFilms(body)
+  const fallbackRecommendations = buildFallbackRecommendations(body, selectedFilms)
   const apiKey = await getGroqApiKey()
 
   if (!apiKey) {
-    return jsonResponse({ error: 'GROQ_API_KEY is not configured.' }, 500)
+    return jsonResponse({ recommendations: fallbackRecommendations })
   }
 
   try {
-    const recommendations = await callGroq(apiKey, body, buildPrompt(body), 0.8)
+    const recommendations = await callGroq(
+      apiKey,
+      buildExplanationPrompt(body, selectedFilms),
+      selectedFilms,
+      0.8,
+    )
     return jsonResponse({ recommendations })
   } catch (error) {
     if (error instanceof ModelOutputError) {
       try {
         const recommendations = await callGroq(
           apiKey,
-          body,
-          buildPrompt(body, { strictSuffix: strictRetrySuffix }),
+          buildExplanationPrompt(body, selectedFilms, {
+            strictSuffix: strictRetrySuffix,
+          }),
+          selectedFilms,
           0.5,
         )
         return jsonResponse({ recommendations })
       } catch (retryError) {
-        const message =
-          retryError instanceof Error
-            ? retryError.message
-            : 'Failed to parse recommendation response.'
-        return jsonResponse({ error: message }, 502)
+        return jsonResponse({ recommendations: fallbackRecommendations })
       }
     }
 
-    const message =
-      error instanceof Error ? error.message : 'Recommendation request failed.'
-    return jsonResponse({ error: message }, 502)
+    return jsonResponse({ recommendations: fallbackRecommendations })
   }
 }
