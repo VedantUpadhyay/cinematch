@@ -18,6 +18,13 @@ CineMatch is a psychologically-grounded movie recommendation web app. Users answ
 - **Deployment**: Vercel (handles both static frontend + edge functions)
 - **Package Manager**: pnpm
 
+## Infrastructure
+
+Feedback data is stored in Vercel KV (serverless Redis). To set up:
+1. Go to your Vercel project dashboard → Storage → Create KV Database
+2. Connect it to your project — Vercel automatically injects `KV_REST_API_URL` and `KV_REST_API_TOKEN`
+3. For local dev: run `vercel env pull .env.local` to get the KV credentials locally
+
 ## Project Structure
 
 ```

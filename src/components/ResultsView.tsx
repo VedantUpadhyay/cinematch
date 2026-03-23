@@ -1,5 +1,6 @@
-import { memo } from 'react'
-import type { Recommendation, UserProfile } from '../types'
+import { memo, useEffect, useRef, useState } from 'react'
+import { useFeedback } from '../hooks/useFeedback'
+import type { FeedbackRating, Recommendation, UserProfile } from '../types'
 import AxisBar from './AxisBar'
 import ProfileSummary from './ProfileSummary'
 
@@ -20,12 +21,56 @@ function ResultsViewComponent({
   profile,
   recommendations,
 }: ResultsViewProps) {
+  const { getRating, hasRated, submitFeedback } = useFeedback()
+  const [thanksIds, setThanksIds] = useState<Set<number>>(() => new Set())
+  const timeoutHandles = useRef<Map<number, number>>(new Map())
+
+  useEffect(() => {
+    return () => {
+      timeoutHandles.current.forEach((handle) => {
+        window.clearTimeout(handle)
+      })
+      timeoutHandles.current.clear()
+    }
+  }, [])
+
   const copingDescription =
     profile.copingStyle === 'lean-in'
       ? 'mood-congruent catharsis'
       : profile.copingStyle === 'shift-away'
         ? 'gentle mood redirection'
         : 'balanced mood regulation'
+
+  const handleRate = (recommendation: Recommendation, rating: FeedbackRating) => {
+    if (hasRated(recommendation.tmdbId)) {
+      return
+    }
+
+    void submitFeedback(recommendation, rating, profile)
+
+    setThanksIds((current) => {
+      const next = new Set(current)
+      next.add(recommendation.tmdbId)
+      return next
+    })
+
+    const existingHandle = timeoutHandles.current.get(recommendation.tmdbId)
+
+    if (existingHandle) {
+      window.clearTimeout(existingHandle)
+    }
+
+    const nextHandle = window.setTimeout(() => {
+      setThanksIds((current) => {
+        const next = new Set(current)
+        next.delete(recommendation.tmdbId)
+        return next
+      })
+      timeoutHandles.current.delete(recommendation.tmdbId)
+    }, 1500)
+
+    timeoutHandles.current.set(recommendation.tmdbId, nextHandle)
+  }
 
   return (
     <div className="space-y-6">
@@ -53,7 +98,7 @@ function ResultsViewComponent({
       <section aria-label="Film recommendations" className="space-y-5">
         {recommendations.map((recommendation, index) => (
           <article
-            key={`${recommendation.title}-${recommendation.year}`}
+            key={recommendation.tmdbId}
             className="rounded-sm border border-[color:var(--cm-border)] bg-[color:var(--cm-panel)] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.35)] sm:p-7"
           >
             <header className="flex flex-col gap-3 border-b border-[rgba(232,224,212,0.08)] pb-5 sm:flex-row sm:items-start sm:justify-between">
@@ -97,6 +142,47 @@ function ResultsViewComponent({
                 ))}
               </div>
             </section>
+
+            <div className="mt-5 flex items-center justify-end gap-2">
+              {(['up', 'down'] as const).map((rating) => {
+                const currentRating = getRating(recommendation.tmdbId)
+                const isSelected = currentRating === rating
+                const isLocked = currentRating !== null
+                const label = rating === 'up' ? 'Thumbs up' : 'Thumbs down'
+
+                return (
+                  <button
+                    key={rating}
+                    aria-label={`${label} for ${recommendation.title}`}
+                    className={[
+                      'cinematch-focus inline-flex h-9 w-9 items-center justify-center rounded-full border text-base transition',
+                      isSelected
+                        ? 'border-[color:var(--cm-gold)] bg-[rgba(212,168,67,0.16)] text-[color:var(--cm-gold)]'
+                        : isLocked
+                          ? 'cursor-not-allowed border-[rgba(232,224,212,0.08)] bg-transparent text-[color:var(--cm-text-muted)] opacity-45'
+                          : 'border-[rgba(232,224,212,0.12)] bg-transparent text-[color:var(--cm-text-muted)] hover:border-[color:var(--cm-gold)] hover:bg-[rgba(212,168,67,0.08)] hover:text-[color:var(--cm-text)]',
+                    ].join(' ')}
+                    disabled={isLocked}
+                    onClick={() => handleRate(recommendation, rating)}
+                    type="button"
+                  >
+                    <span aria-hidden="true">{rating === 'up' ? '👍' : '👎'}</span>
+                  </button>
+                )
+              })}
+
+              <span
+                aria-live="polite"
+                className={[
+                  '[font-family:var(--cm-font-mono)] text-[0.7rem] uppercase tracking-[0.14em] text-[color:var(--cm-copper)] transition duration-300',
+                  thanksIds.has(recommendation.tmdbId)
+                    ? 'translate-y-0 opacity-100'
+                    : 'pointer-events-none translate-y-1 opacity-0',
+                ].join(' ')}
+              >
+                Thanks
+              </span>
+            </div>
           </article>
         ))}
       </section>

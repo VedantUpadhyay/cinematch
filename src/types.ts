@@ -9,6 +9,7 @@ export type AxisScores = {
 export type ProfileAxis = keyof AxisScores
 
 export type CopingStyle = 'lean-in' | 'shift-away'
+export type FeedbackRating = 'up' | 'down'
 
 export type UserProfile = AxisScores & {
   mood: string
@@ -44,6 +45,7 @@ export type CopingOption = {
 }
 
 export type Recommendation = {
+  tmdbId: number
   title: string
   year: number
   genre: string
@@ -54,4 +56,17 @@ export type Recommendation = {
 
 export type APIResponse = {
   recommendations: Recommendation[]
+}
+
+export type FeedbackPayload = {
+  sessionId: string
+  filmTitle: string
+  filmYear: number
+  tmdbId: number
+  rating: FeedbackRating
+  profileHash: string
+  profile: UserProfile
+  mood: string
+  copingStyle: CopingStyle
+  timestamp: string
 }

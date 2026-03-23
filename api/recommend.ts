@@ -73,6 +73,8 @@ type GroqMessage = {
   content: string
 }
 
+type ModelRecommendation = Omit<Recommendation, 'tmdbId'>
+
 class ProviderResponseError extends Error {}
 
 class ModelOutputError extends Error {}
@@ -131,7 +133,7 @@ function isProfile(value: unknown): value is UserProfile {
   )
 }
 
-function isRecommendation(value: unknown): value is Recommendation {
+function isRecommendation(value: unknown): value is ModelRecommendation {
   if (!isObject(value) || !isObject(value.axisScores)) {
     return false
   }
@@ -178,6 +180,7 @@ function buildFallbackRecommendations(
       : `Selected based on your psychological profile match, especially your ${profile.mood} + ${profile.copingStyle} mood-regulation preference.`
 
   return selectedFilms.map((film) => ({
+    tmdbId: film.tmdb_id,
     title: film.title,
     year: film.year,
     genre: film.genres[0] ?? 'Drama',
@@ -218,6 +221,7 @@ function parseRecommendations(
     matchedTitles.add(normalizeTitle(recommendation.title))
 
     return {
+      tmdbId: matchedFilm.tmdb_id,
       title: matchedFilm.title,
       year: matchedFilm.year,
       genre: matchedFilm.genres[0] ?? recommendation.genre,
