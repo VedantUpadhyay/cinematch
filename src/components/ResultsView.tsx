@@ -11,8 +11,8 @@ type ResultsViewProps = {
 const axisLabels = [
   ['hedonic', 'Hedonic'],
   ['arousal', 'Arousal'],
-  ['moralFlex', 'Moral Flex'],
-  ['literacy', 'Literacy'],
+  ['moralFlex', 'Moral Ambiguity Tolerance'],
+  ['literacy', 'Complexity Tolerance'],
   ['social', 'Social'],
 ] as const
 

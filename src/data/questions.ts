@@ -30,9 +30,9 @@ export const questions: Question[] = [
   {
     axis: 'moralFlex',
     label: 'How do you feel about morally grey characters?',
-    description: 'Moral Schema Flexibility',
+    description: 'Moral Ambiguity Tolerance',
     research:
-      "Zillmann's Affective Disposition Theory — enjoyment depends on moral evaluation of characters. Raney (2004) extended this: viewers with flexible schemas enjoy antihero narratives more.",
+      "Zillmann's Affective Disposition Theory — enjoyment depends on moral evaluation of characters. Raney (2004) showed viewers with higher tolerance for moral ambiguity enjoy antihero narratives more.",
     options: [
       { label: 'Love them — give me the messy humans', value: 0.85, emoji: '🐺' },
       {
@@ -46,23 +46,34 @@ export const questions: Question[] = [
   },
   {
     axis: 'literacy',
-    label: 'How adventurous are you with film?',
-    description: 'Film Literacy / Schema Sophistication',
+    label: 'How much narrative complexity do you enjoy?',
+    description: 'Complexity Tolerance',
     research:
-      'Bordwell (1985) — experienced viewers develop richer narrative schemas. Cognitive Film Theory posits spectatorship as active, hypothesis-driven processing modulated by exposure.',
+      'Bordwell (1985) — Cognitive Film Theory. Viewers develop narrative schemas that determine their tolerance for structural complexity, non-linear storytelling, and unconventional filmmaking techniques.',
     options: [
       {
-        label: 'I watch everything — art house, foreign, experimental',
+        label:
+          'I love non-linear stories, visual symbolism, and experimental filmmaking',
         value: 0.9,
         emoji: '🎥',
       },
       {
-        label: "I appreciate craft but don't seek out obscure stuff",
+        label:
+          "I appreciate complex storytelling but don't need it every time",
         value: 0.65,
         emoji: '📽️',
       },
-      { label: 'I know what I like — mostly mainstream but open', value: 0.4, emoji: '🍿' },
-      { label: 'Keep it accessible — no subtitles tonight', value: 0.2, emoji: '📺' },
+      {
+        label:
+          "I prefer clear, well-told stories but I'm open to some complexity",
+        value: 0.4,
+        emoji: '🍿',
+      },
+      {
+        label: 'Keep it straightforward — I want to follow along easily',
+        value: 0.2,
+        emoji: '📺',
+      },
     ],
   },
   {

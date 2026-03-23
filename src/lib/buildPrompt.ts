@@ -24,13 +24,13 @@ function getCopingGuidance(profile: UserProfile) {
 
 function formatProfile(profile: UserProfile) {
   return [
-    `- hedonic (${profile.hedonic})`,
-    `- arousal (${profile.arousal})`,
-    `- moralFlex (${profile.moralFlex})`,
-    `- literacy (${profile.literacy})`,
-    `- social (${profile.social})`,
-    `- mood (${profile.mood})`,
-    `- copingStyle (${profile.copingStyle ?? 'none'})`,
+    `- HEDONIC (${profile.hedonic})`,
+    `- AROUSAL (${profile.arousal})`,
+    `- MORAL AMBIGUITY TOLERANCE / moralFlex (${profile.moralFlex})`,
+    `- COMPLEXITY TOLERANCE / literacy (${profile.literacy})`,
+    `- SOCIAL (${profile.social})`,
+    `- MOOD (${profile.mood})`,
+    `- COPING STYLE (${profile.copingStyle ?? 'none'})`,
   ].join('\n')
 }
 
@@ -43,7 +43,7 @@ function formatSelectedFilms(films: ScoredFilm[]) {
         `   Genres: ${film.genres.join(', ')}`,
         `   Language: ${film.original_language}`,
         `   Overview: ${film.overview}`,
-        `   Pre-tagged axis scores: hedonic=${film.scores.hedonic}, arousal=${film.scores.arousal}, moralFlex=${film.scores.moralFlex}, literacy=${film.scores.literacy}, social=${film.scores.social}`,
+        `   Pre-tagged axis scores: HEDONIC=${film.scores.hedonic}, AROUSAL=${film.scores.arousal}, MORAL AMBIGUITY TOLERANCE / moralFlex=${film.scores.moralFlex}, COMPLEXITY TOLERANCE / literacy=${film.scores.literacy}, SOCIAL=${film.scores.social}`,
         `   Selector stats: matchScore=${film.matchScore}, axisDistance=${film.axisDistance}, moodAffinity=${film.moodAffinity}, diversityBonus=${film.diversityBonus}`,
       ].join('\n')
     })

@@ -10,9 +10,9 @@
 
 Every recommendation engine you use — Netflix, Spotify, Amazon — runs on collaborative filtering: find users similar to you, suggest what they consumed. This works, but it's a black box. You never know *why* something was recommended, and the system optimizes for engagement, not for what you actually need right now.
 
-CineMatch takes a different approach. Instead of mining your watch history, it builds a real-time psychological profile using research-backed dimensions, then uses an LLM as a film knowledge engine — steered by that profile — to generate recommendations with transparent, per-film explanations of *why this film fits you right now*.
+CineMatch takes a different approach. Instead of mining your watch history, it builds a real-time psychological profile using research-backed dimensions, scores a pre-tagged film corpus with pure math, and then uses an LLM only to explain *why these already-selected films fit you right now*.
 
-The result: a sad, meaning-seeking solo viewer gets Manchester by the Sea and In the Mood for Love. A restless, high-energy viewer watching with friends gets Mad Max: Fury Road and Oldboy. Same system, radically different output, and you can see exactly why.
+The result: a sad, meaning-seeking solo viewer gets a quiet, melancholic spread like *Yearning*, *The Color of Paradise*, and *Shoah*. A restless, high-energy viewer gets a kinetic set like *Andhadhun*, *Akira*, and *Memento*. Same system, radically different output, and you can see exactly why.
 
 ---
 
@@ -26,8 +26,8 @@ The profiling system draws on five established frameworks in personality psychol
 |------|----------|---------------|
 | **Hedonic ↔ Eudaimonic** | Are you watching for pleasure or meaning? | Oliver & Raney (2011) — hedonic motivation predicts preference for action/comedy; eudaimonic motivation predicts drama and deeper cognitive elaboration during viewing |
 | **Arousal Tolerance** | How much pacing intensity and sensory stimulation do you want? | Zuckerman (1994) — sensation seeking as a predictor of media preference; Banerjee et al. (2008) — film mood and arousal as selection drivers |
-| **Moral Schema Flexibility** | Do you need clear heroes, or do you enjoy moral ambiguity? | Zillmann's Affective Disposition Theory — enjoyment depends on moral evaluation of characters; Raney (2004) — flexible schemas predict antihero narrative enjoyment |
-| **Film Literacy** | How unconventional can the filmmaking be? | Bordwell (1985) — cognitive film theory; experienced viewers develop richer narrative schemas that modulate film processing |
+| **Moral Ambiguity Tolerance** | Do you need clear heroes, or do you enjoy moral ambiguity? | Zillmann's Affective Disposition Theory — enjoyment depends on moral evaluation of characters; Raney (2004) showed viewers with higher tolerance for moral ambiguity enjoy antihero narratives more |
+| **Complexity Tolerance** | How much narrative complexity do you enjoy? | Bordwell (1985) — Cognitive Film Theory; viewers develop narrative schemas that shape their tolerance for structural complexity, non-linear storytelling, and unconventional filmmaking techniques |
 | **Social Context** | Who's watching with you? | Uses & Gratifications Theory — social viewing shifts preferences toward shared-experience films with broader appeal |
 
 ### Mood + Coping Style
@@ -56,43 +56,24 @@ The coping style question produces meaningfully different recommendations:
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                    Frontend (React)                 │
-│                                                     │
-│  ┌──────────┐  ┌───────────┐  ┌───────────────────┐ │
-│  │ 5-Axis   │→ │ Mood +    │→ │ Results View      │ │
-│  │ Questions│  │ Coping    │  │ (explainability   │ │
-│  │          │  │ Style     │  │  per film)        │ │
-│  └──────────┘  └───────────┘  └───────────────────┘ │
-│                      │                    ↑         │
-│                      ▼                    │         │
-│              ┌──────────────┐             │         │
-│              │ buildPrompt  │             │         │
-│              │ (structured  │             │         │
-│              │  profile →   │             │         │
-│              │  LLM prompt) │             │         │
-│              └──────┬───────┘             │         │
-└─────────────────────┼─────────────────────┼─────────┘
-                      │                     │
-                      ▼                     │
-              ┌──────────────┐              │
-              │ Vercel Edge  │──────────────┘
-              │ Function     │
-              │ /api/recommend│
-              └──────┬───────┘
-                     │
-                     ▼
-              ┌──────────────┐
-              │ Groq API     │
-              │ GPT-OSS-120B │
-              │ (structured  │
-              │  JSON output)│
-              └──────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                      Frontend (React)                      │
+│                                                             │
+│  ┌──────────────┐  ┌─────────────────────┐  ┌────────────┐ │
+│  │ User Profile │→ │ Scoring Engine      │→ │ LLM        │→│
+│  │ (5 axes +    │  │ (math, ~2ms)        │  │ explanations│ │
+│  │ mood + cope) │  │ weighted distance + │  │ only        │ │
+│  │              │  │ mood affinity + MMR │  │             │ │
+│  └──────────────┘  └─────────────────────┘  └────────────┘ │
+│                                                             │
+│                             ↓                               │
+│                    Results View / Display                   │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-The key design decision: **the research framework is the prompt, not the model.** The LLM serves as an infinite film knowledge base — it knows thousands of films across decades, genres, and regions. The 5-axis profile + mood + coping style become a structured prompt that steers the LLM's knowledge toward psychologically appropriate recommendations. The LLM also self-rates each recommendation on the 5 axes, enabling the visual axis-match display.
+The major architectural decision now is: **film selection is deterministic, explanations are generative.** The recommendation engine scores a bundled corpus of 500 pre-tagged films using weighted Euclidean distance on the 5 axes, combines that with mood×coping affinity, and then applies MMR (Maximal Marginal Relevance) to ensure the final 5 are diverse across genre, decade, and region.
 
-This is a hybrid architecture: structured psychological profiling (deterministic) × LLM film knowledge (generative), with explainability surfaced through both the "why this film" prose and the per-axis match bars.
+The LLM is still useful, but its role is narrower and safer: once the math engine has already selected 5 real TMDB-backed films, GPT-OSS writes the taglines and "why this film" explanations. That removes hallucinated titles from the critical path, makes selection effectively instant, and gives the app a graceful fallback path when the explanation layer is rate-limited.
 
 ---
 
@@ -100,7 +81,9 @@ This is a hybrid architecture: structured psychological profiling (deterministic
 
 - **Frontend**: Vite + React 18 + TypeScript + Tailwind CSS
 - **Backend**: Vercel Edge Functions
-- **LLM**: OpenAI GPT-OSS-120B via Groq (structured JSON output with `json_schema` mode)
+- **Scoring Engine**: weighted Euclidean distance + mood affinity + MMR diversification
+- **Film Corpus**: 500 pre-tagged, cross-validated films bundled into the app at build time
+- **LLM**: OpenAI GPT-OSS-120B via Groq for explanation generation only
 - **Deployment**: Vercel
 
 ---
@@ -116,6 +99,7 @@ cd cinematch
 pnpm install
 
 # Add your Groq API key (get one free at console.groq.com)
+# Without it, CineMatch still returns the 5 selected films with generic fallback explanations.
 echo "GROQ_API_KEY=gsk_your_key_here" > .env.local
 
 # Run with Vercel dev (needed for edge functions)
@@ -131,7 +115,7 @@ pnpm dlx vercel dev --local --listen 127.0.0.1:3000 --yes
 ```
 cinematch/
 ├── api/
-│   └── recommend.ts            # Vercel Edge Function — LLM proxy + validation
+│   └── recommend.ts            # Math-first selector + explanation proxy
 ├── src/
 │   ├── components/
 │   │   ├── Layout.tsx          # Shell, header, progress bar, grain overlay
@@ -141,39 +125,55 @@ cinematch/
 │   │   ├── ProfileSummary.tsx  # 5-axis profile visualization
 │   │   └── AxisBar.tsx         # Per-axis match bar
 │   ├── data/
+│   │   ├── films.json          # 500-film reconciled corpus (runtime source of truth)
 │   │   ├── questions.ts        # 5 questions with research citations
 │   │   └── moods.ts            # 6 moods + 2 coping styles
 │   ├── hooks/
 │   │   └── useQuestionnaire.ts # Questionnaire state machine
 │   └── lib/
-│       ├── buildPrompt.ts      # Profile → structured LLM prompt (core IP)
+│       ├── scoringEngine.ts    # Weighted matching + MMR film selection
+│       ├── buildPrompt.ts      # Explanation-only prompt for the selected 5 films
 │       └── api.ts              # Client fetch to /api/recommend
 └── AGENTS.md                   # Codex agent instructions
 ```
 
-The most important file is `src/lib/buildPrompt.ts` — this is where the research framework is operationalized into a prompt. It defines each axis with explicit behavioral examples (e.g., "Mad Max: Fury Road is high arousal. Mulholland Drive is low arousal."), enforces genre/decade/region diversity, integrates mood-regulation guidance with coping style, and requires per-film explanations that reference concrete film elements rather than abstract axis labels.
+The most important runtime file is `src/lib/scoringEngine.ts` — this is where the profile becomes a ranked, diversified film set. The most important data asset is `src/data/films.json`, a bundled corpus of 500 TMDB-backed films whose scores were tagged offline and then reconciled across GPT-5.4 and Gemini 3.
 
 ---
 
-## How the Prompt Engineering Works
+## How Selection Works
 
-The system prompt encodes each axis with **contrastive definitions** — not just what high/low means, but explicit film examples to anchor the LLM's interpretation:
+Each film in the corpus carries:
+- 5 axis scores: `hedonic`, `arousal`, `moralFlex`, `literacy`, `social`
+- 12 mood×coping affinities: `sad_lean_in`, `sad_shift_away`, etc.
+- TMDB-backed metadata: title, year, genres, language, overview, poster
 
-> *AROUSAL measures pacing and sensory intensity — fast editing, physical tension, action sequences, chase scenes, visceral cinematography. It does NOT mean thematic darkness. A slow-burn psychological drama is LOW arousal regardless of how disturbing its themes are.*
+At runtime, CineMatch computes:
+- **Axis distance**: weighted Euclidean distance between the user profile and each film’s 5-axis score vector
+- **Mood affinity**: direct lookup using `mood + copingStyle`
+- **Match score**: `moodAffinity * 1.5 - axisDistance`
 
-This distinction — arousal-as-pacing vs. arousal-as-thematic-intensity — was the single biggest quality improvement. Without it, an LLM defaults to recommending dark arthouse films for any profile with high arousal + high literacy, because "intense prestigious film" is a strong prior in training data.
+Then it uses **Maximal Marginal Relevance (MMR)** to choose the final 5, so the set does not collapse into one genre, one decade, or one region. Similarity is penalized if two films share the same primary genre, decade, or original language.
 
-The diversity constraint is enforced both in the prompt ("each recommendation MUST have a different primary genre") and in server-side validation (the edge function checks for duplicate genres and retries if the constraint is violated).
+The practical effect is that diversity is now enforced by math rather than prompt compliance.
+
+## How Prompt Engineering Works Now
+
+Prompt engineering is now scoped to the explanation layer only. Once 5 films are selected, the edge function sends the user profile plus those exact films to GPT-OSS-120B and asks it to do one job only: write taglines and distinct, concrete explanations for why each film matches this person right now.
+
+If the LLM call fails, the API still returns the same 5 films with generic fallback copy. Selection never depends on provider uptime.
 
 ---
 
 ## What I Learned
 
-**The research framework matters more than the model.** Swapping from Llama 3.3 70B to GPT-OSS-120B improved quality, but the biggest improvement came from tightening the axis definitions in the prompt. A smarter model with a vague prompt still produces generic output. A well-defined prompt with contrastive examples produces good output even on smaller models.
+**The biggest quality win was taking film selection away from the LLM.** The prompt mattered, but no amount of prompt tuning was as reliable as moving recommendation choice into a deterministic scoring engine with a pre-tagged corpus.
 
 **Coping style is the most underrated dimension.** Most recommendation systems ignore whether you want mood-congruent or mood-incongruent content. Adding one binary question ("lean into this feeling or shift away?") produced the most dramatic difference in recommendation quality across all the changes made during development.
 
-**Explainability changes how people evaluate recommendations.** When users can see *why* a film was recommended — which axes matched, how the mood-regulation logic worked — they evaluate recommendations more charitably and engage more with films they wouldn't normally choose.
+**Cross-validation matters when you turn taste into numbers.** Reconciling GPT-5.4 and Gemini 3 scores forced the project to confront disagreements explicitly instead of trusting a single model’s tagging priors.
+
+**Explainability still matters, but it is now decoupled from selection.** The system can select robustly even if the explanation model is down, which is a much better reliability boundary.
 
 ---
 
