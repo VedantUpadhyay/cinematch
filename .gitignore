@@ -27,3 +27,4 @@ dist-ssr
 .vercel
 .env*.local
 scripts/test-results.json
+data/
