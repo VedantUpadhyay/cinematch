@@ -1,0 +1,97 @@
+@import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;500;600&display=swap');
+@import "tailwindcss";
+
+:root {
+  --cm-bg: #0d0d0d;
+  --cm-bg-elevated: #1a1510;
+  --cm-panel: rgba(20, 18, 15, 0.88);
+  --cm-panel-muted: rgba(17, 15, 12, 0.7);
+  --cm-border: rgba(212, 168, 67, 0.14);
+  --cm-border-strong: rgba(212, 168, 67, 0.32);
+  --cm-progress-track: rgba(212, 168, 67, 0.08);
+  --cm-gold: #d4a843;
+  --cm-copper: #c4956a;
+  --cm-lavender: #8b7ec8;
+  --cm-text: #e8e0d4;
+  --cm-text-soft: rgba(232, 224, 212, 0.8);
+  --cm-text-muted: rgba(232, 224, 212, 0.56);
+  --cm-font-serif: Georgia, 'Source Serif 4', 'Times New Roman', serif;
+  --cm-font-mono: 'Courier New', Courier, monospace;
+
+  color-scheme: dark;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html {
+  min-height: 100%;
+  background:
+    radial-gradient(circle at top, rgba(212, 168, 67, 0.08), transparent 34%),
+    linear-gradient(170deg, var(--cm-bg) 0%, var(--cm-bg-elevated) 42%, var(--cm-bg) 100%);
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  background: transparent;
+  color: var(--cm-text);
+  font-family: var(--cm-font-serif);
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+a,
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.cinematch-focus:focus-visible,
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--cm-gold);
+  outline-offset: 3px;
+}
+
+.cinematch-shell {
+  background:
+    radial-gradient(circle at top, rgba(212, 168, 67, 0.06), transparent 30%),
+    linear-gradient(170deg, var(--cm-bg) 0%, var(--cm-bg-elevated) 42%, var(--cm-bg) 100%);
+}
+
+.grain-overlay {
+  opacity: 0.22;
+  mix-blend-mode: soft-light;
+  filter: url(#grain-filter);
+  background:
+    radial-gradient(circle at 15% 20%, rgba(255, 255, 255, 0.12) 0, transparent 20%),
+    radial-gradient(circle at 80% 10%, rgba(212, 168, 67, 0.12) 0, transparent 18%),
+    radial-gradient(circle at 50% 80%, rgba(255, 255, 255, 0.08) 0, transparent 16%);
+}
+
+.fade-step {
+  animation: fade-step-in 320ms ease-out both;
+}
+
+@keyframes fade-step-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

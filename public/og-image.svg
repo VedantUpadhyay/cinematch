@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-label="CineMatch Open Graph image">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#0D0D0D" />
+      <stop offset="55%" stop-color="#1A1510" />
+      <stop offset="100%" stop-color="#0D0D0D" />
+    </linearGradient>
+    <linearGradient id="accent" x1="0" x2="1" y1="0" y2="0">
+      <stop offset="0%" stop-color="#D4A843" />
+      <stop offset="100%" stop-color="#C4956A" />
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)" />
+  <circle cx="980" cy="120" r="200" fill="#D4A843" fill-opacity=".06" />
+  <circle cx="140" cy="530" r="180" fill="#8B7EC8" fill-opacity=".08" />
+  <path
+    d="M235 202c-32-31-79-50-132-50-99 0-179 80-179 179s80 179 179 179c53 0 100-19 132-50"
+    fill="none"
+    stroke="url(#accent)"
+    stroke-linecap="round"
+    stroke-width="28"
+    transform="translate(135 0)"
+  />
+  <text
+    x="420"
+    y="262"
+    fill="#D4A843"
+    font-family="'Courier New', Courier, monospace"
+    font-size="38"
+    letter-spacing="14"
+  >
+    CINEMATCH
+  </text>
+  <text
+    x="420"
+    y="352"
+    fill="#E8E0D4"
+    font-family="Georgia, 'Times New Roman', serif"
+    font-size="64"
+  >
+    Film recommendations
+  </text>
+  <text
+    x="420"
+    y="424"
+    fill="#E8E0D4"
+    font-family="Georgia, 'Times New Roman', serif"
+    font-size="64"
+  >
+    grounded in psychology.
+  </text>
+  <text
+    x="420"
+    y="500"
+    fill="#8B7EC8"
+    font-family="'Courier New', Courier, monospace"
+    font-size="24"
+    letter-spacing="2"
+  >
+    Personality psychology · media motivation theory · cognitive film studies
+  </text>
+</svg>
