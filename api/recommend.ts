@@ -20,6 +20,48 @@ const strictRetrySuffix = [
   'Every item must include title, year, genre, tagline, why, and axisScores with all five numeric axis values.',
 ].join(' ')
 
+const groqResponseFormat = {
+  type: 'json_schema',
+  json_schema: {
+    name: 'movie_recommendations',
+    strict: true,
+    schema: {
+      type: 'object',
+      properties: {
+        recommendations: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              title: { type: 'string' },
+              year: { type: 'integer' },
+              genre: { type: 'string' },
+              tagline: { type: 'string' },
+              why: { type: 'string' },
+              axisScores: {
+                type: 'object',
+                properties: {
+                  hedonic: { type: 'number' },
+                  arousal: { type: 'number' },
+                  moralFlex: { type: 'number' },
+                  literacy: { type: 'number' },
+                  social: { type: 'number' },
+                },
+                required: ['hedonic', 'arousal', 'moralFlex', 'literacy', 'social'],
+                additionalProperties: false,
+              },
+            },
+            required: ['title', 'year', 'genre', 'tagline', 'why', 'axisScores'],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ['recommendations'],
+      additionalProperties: false,
+    },
+  },
+} as const
+
 // `vercel dev` may read local envs from `.vercel/` rather than injecting `.env.local`
 // into edge runtimes, so we fall back to those files when `process.env` is empty.
 const localEnvPaths = ['.vercel/.env.development.local', '.env.local']
@@ -101,7 +143,10 @@ function isRecommendation(value: unknown): value is Recommendation {
   )
 }
 
-function parseRecommendations(payload: unknown): Recommendation[] {
+function parseRecommendations(
+  payload: unknown,
+  profile: UserProfile,
+): Recommendation[] {
   if (
     !isObject(payload) ||
     !Array.isArray(payload.recommendations) ||
@@ -111,6 +156,41 @@ function parseRecommendations(payload: unknown): Recommendation[] {
     throw new ModelOutputError(
       'Model response did not match the expected recommendation schema.',
     )
+  }
+
+  const normalizedGenres = payload.recommendations.map((recommendation) =>
+    recommendation.genre.trim().toLowerCase(),
+  )
+  const uniqueGenres = new Set(normalizedGenres)
+
+  if (uniqueGenres.size !== payload.recommendations.length) {
+    throw new ModelOutputError(
+      'Model response failed the genre-diversity requirement.',
+    )
+  }
+
+  const decades = new Set(
+    payload.recommendations.map((recommendation) =>
+      Math.floor(recommendation.year / 10),
+    ),
+  )
+
+  if (decades.size < 3) {
+    throw new ModelOutputError(
+      'Model response failed the decade-diversity requirement.',
+    )
+  }
+
+  if (profile.hedonic > 0.5) {
+    const punishingGenres = normalizedGenres.filter((genre) =>
+      ['horror', 'tragedy', 'misery drama'].includes(genre),
+    )
+
+    if (punishingGenres.length >= 3) {
+      throw new ModelOutputError(
+        'Model response over-indexed on punishing genres for a hedonic-leaning profile.',
+      )
+    }
   }
 
   return payload.recommendations
@@ -208,6 +288,7 @@ async function getGroqApiKey(): Promise<string | null> {
 
 async function callGroq(
   apiKey: string,
+  profile: UserProfile,
   messages: GroqMessage[],
   temperature: number,
 ): Promise<Recommendation[]> {
@@ -218,10 +299,11 @@ async function callGroq(
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'llama-3.3-70b-versatile',
+      model: 'openai/gpt-oss-120b',
       temperature,
-      max_tokens: 2000,
-      response_format: { type: 'json_object' },
+      max_tokens: 3000,
+      reasoning_effort: 'medium',
+      response_format: groqResponseFormat,
       messages,
     }),
   })
@@ -252,7 +334,7 @@ async function callGroq(
     throw new ModelOutputError('Groq returned invalid JSON content.')
   }
 
-  return parseRecommendations(parsed)
+  return parseRecommendations(parsed, profile)
 }
 
 export default async function handler(request: Request) {
@@ -289,13 +371,14 @@ export default async function handler(request: Request) {
   }
 
   try {
-    const recommendations = await callGroq(apiKey, buildPrompt(body), 0.8)
+    const recommendations = await callGroq(apiKey, body, buildPrompt(body), 0.8)
     return jsonResponse({ recommendations })
   } catch (error) {
     if (error instanceof ModelOutputError) {
       try {
         const recommendations = await callGroq(
           apiKey,
+          body,
           buildPrompt(body, { strictSuffix: strictRetrySuffix }),
           0.5,
         )
