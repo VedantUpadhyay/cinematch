@@ -20,10 +20,12 @@ CineMatch is a psychologically-grounded movie recommendation web app. Users answ
 
 ## Infrastructure
 
-Feedback data is stored in Vercel KV (serverless Redis). To set up:
-1. Go to your Vercel project dashboard → Storage → Create KV Database
-2. Connect it to your project — Vercel automatically injects `KV_REST_API_URL` and `KV_REST_API_TOKEN`
-3. For local dev: run `vercel env pull .env.local` to get the KV credentials locally
+Feedback data is stored in Turso (libSQL/SQLite at the edge). To set up:
+1. Create a free account at turso.tech
+2. Create a database named cinematch-feedback
+3. Add `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` to `.env.local`
+4. Hit `GET /api/db-init` once to create the tables
+5. For production: add both env vars to Vercel project settings
 
 ## Project Structure
 

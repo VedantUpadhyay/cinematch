@@ -65,8 +65,8 @@ export type FeedbackPayload = {
   tmdbId: number
   rating: FeedbackRating
   profileHash: string
-  profile: UserProfile
+  profile?: UserProfile
   mood: string
   copingStyle: CopingStyle
-  timestamp: string
+  timestamp?: string
 }

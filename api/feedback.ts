@@ -1,5 +1,5 @@
-import { createClient, kv, type VercelKV } from '@vercel/kv'
 import type { CopingStyle, FeedbackPayload, FeedbackRating, UserProfile } from '../src/types.js'
+import { getDb } from '../src/lib/db.js'
 
 export const config = {
   runtime: 'edge',
@@ -12,12 +12,8 @@ const corsHeaders = {
   'Content-Type': 'application/json; charset=utf-8',
 }
 
-const localEnvPaths = ['.vercel/.env.development.local', '.env.local']
-
-let localKvClient: VercelKV | null = null
-
-function escapeRegExp(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+type FeedbackRequestBody = Omit<FeedbackPayload, 'profile'> & {
+  profile?: UserProfile
 }
 
 function jsonResponse(body: unknown, status = 200) {
@@ -64,7 +60,7 @@ function isFeedbackRating(value: unknown): value is FeedbackRating {
   return value === 'up' || value === 'down'
 }
 
-function isFeedbackPayload(value: unknown): value is FeedbackPayload {
+function isFeedbackRequestBody(value: unknown): value is FeedbackRequestBody {
   if (!isObject(value)) {
     return false
   }
@@ -82,113 +78,23 @@ function isFeedbackPayload(value: unknown): value is FeedbackPayload {
     isFeedbackRating(value.rating) &&
     typeof value.profileHash === 'string' &&
     value.profileHash.trim().length > 0 &&
-    isProfile(value.profile) &&
     typeof value.mood === 'string' &&
     value.mood.trim().length > 0 &&
     isCopingStyle(value.copingStyle) &&
-    typeof value.timestamp === 'string' &&
-    value.timestamp.trim().length > 0 &&
-    value.profile.mood === value.mood &&
-    value.profile.copingStyle === value.copingStyle
+    (!('profile' in value) || value.profile === undefined || isProfile(value.profile)) &&
+    (!('timestamp' in value) ||
+      value.timestamp === undefined ||
+      (typeof value.timestamp === 'string' && value.timestamp.trim().length > 0))
   )
 }
 
-function parseDotenvValue(fileContents: string, key: string): string | null {
-  const matcher = new RegExp(
-    `^\\s*(?:export\\s+)?${escapeRegExp(key)}\\s*=\\s*(.*)\\s*$`,
-    'm',
-  )
-  const match = fileContents.match(matcher)
-
-  if (!match) {
-    return null
-  }
-
-  const rawValue = match[1]?.trim() ?? ''
-
-  if (!rawValue) {
-    return null
-  }
-
-  if (
-    (rawValue.startsWith('"') && rawValue.endsWith('"')) ||
-    (rawValue.startsWith("'") && rawValue.endsWith("'"))
-  ) {
-    return rawValue.slice(1, -1)
-  }
-
-  return rawValue.replace(/\s+#.*$/, '').trim() || null
-}
-
-async function readLocalEnvFile(relativePath: string): Promise<string | null> {
-  try {
-    const fsModuleName = 'node:fs/promises'
-    const pathModuleName = 'node:path'
-    const urlModuleName = 'node:url'
-    const [{ readFile }, path, { fileURLToPath }] = await Promise.all([
-      import(fsModuleName),
-      import(pathModuleName),
-      import(urlModuleName),
-    ])
-
-    const currentFile = fileURLToPath(import.meta.url)
-    const currentDirectory = path.dirname(currentFile)
-    const absolutePath = path.resolve(currentDirectory, '..', relativePath)
-
-    return await readFile(absolutePath, 'utf8')
-  } catch {
-    return null
-  }
-}
-
-async function getLocalDevEnvValue(key: string): Promise<string | null> {
-  for (const relativePath of localEnvPaths) {
-    const fileContents = await readLocalEnvFile(relativePath)
-
-    if (!fileContents) {
-      continue
-    }
-
-    const value = parseDotenvValue(fileContents, key)
-
-    if (value) {
-      return value
-    }
-  }
-
-  return null
-}
-
-async function getKvClient(): Promise<VercelKV | null> {
-  if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
-    return kv
-  }
-
-  if (localKvClient) {
-    return localKvClient
-  }
-
-  const [url, token] = await Promise.all([
-    getLocalDevEnvValue('KV_REST_API_URL'),
-    getLocalDevEnvValue('KV_REST_API_TOKEN'),
-  ])
-
-  if (!url || !token) {
-    return null
-  }
-
-  localKvClient = createClient({ url, token })
-  return localKvClient
-}
-
-async function getCount(
-  client: VercelKV,
-  key: string,
-): Promise<number> {
-  const value = await client.get<number | string | null>(key)
-
+function toNumber(value: unknown) {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return value
+  }
+
+  if (typeof value === 'bigint') {
+    return Number(value)
   }
 
   if (typeof value === 'string') {
@@ -199,54 +105,55 @@ async function getCount(
   return 0
 }
 
-async function getStoredRating(
-  client: VercelKV,
-  feedbackKey: string,
-): Promise<FeedbackRating | null> {
-  const value = await client.hget<string | null>(feedbackKey, 'rating')
-  return isFeedbackRating(value) ? value : null
-}
+async function insertFeedback(body: FeedbackRequestBody) {
+  const db = await getDb()
 
-async function writeFeedback(
-  client: VercelKV,
-  payload: FeedbackPayload,
-) {
-  const feedbackKey = `feedback:${payload.sessionId}:${payload.tmdbId}`
-  const existingRating = await getStoredRating(client, feedbackKey)
-
-  if (existingRating) {
+  if (!db) {
     return
   }
 
-  await client.hset(feedbackKey, {
-    sessionId: payload.sessionId,
-    filmTitle: payload.filmTitle,
-    filmYear: payload.filmYear,
-    tmdbId: payload.tmdbId,
-    rating: payload.rating,
-    profileHash: payload.profileHash,
-    mood: payload.mood,
-    copingStyle: payload.copingStyle,
-    timestamp: payload.timestamp,
-    serverTimestamp: new Date().toISOString(),
-    hedonic: payload.profile.hedonic,
-    arousal: payload.profile.arousal,
-    moralFlex: payload.profile.moralFlex,
-    literacy: payload.profile.literacy,
-    social: payload.profile.social,
-    profile: JSON.stringify(payload.profile),
-  })
+  const profile = body.profile
 
-  await Promise.all([
-    client.incr(`stats:film:${payload.tmdbId}:${payload.rating}`),
-    client.incr(`stats:total:${payload.rating}`),
-  ])
+  await db.execute({
+    sql: `INSERT OR IGNORE INTO feedback (
+      session_id,
+      tmdb_id,
+      film_title,
+      film_year,
+      rating,
+      profile_hash,
+      mood,
+      coping_style,
+      hedonic,
+      arousal,
+      moral_flex,
+      literacy,
+      social,
+      created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [
+      body.sessionId,
+      body.tmdbId,
+      body.filmTitle,
+      body.filmYear,
+      body.rating,
+      body.profileHash,
+      body.mood,
+      body.copingStyle,
+      profile?.hedonic ?? null,
+      profile?.arousal ?? null,
+      profile?.moralFlex ?? null,
+      profile?.literacy ?? null,
+      profile?.social ?? null,
+      body.timestamp ?? new Date().toISOString(),
+    ],
+  })
 }
 
-async function readStats() {
-  const client = await getKvClient()
+async function readAggregateStats() {
+  const db = await getDb()
 
-  if (!client) {
+  if (!db) {
     return {
       total: { up: 0, down: 0 },
       rating: 0,
@@ -254,18 +161,69 @@ async function readStats() {
   }
 
   try {
-    const [up, down] = await Promise.all([
-      getCount(client, 'stats:total:up'),
-      getCount(client, 'stats:total:down'),
-    ])
-    const total = up + down
+    const result = await db.execute(
+      'SELECT rating, COUNT(*) as count FROM feedback GROUP BY rating',
+    )
+    const totals = { up: 0, down: 0 }
+
+    for (const row of result.rows) {
+      const rating = row.rating
+
+      if (rating === 'up' || rating === 'down') {
+        totals[rating] = toNumber(row.count)
+      }
+    }
+
+    const totalCount = totals.up + totals.down
 
     return {
-      total: { up, down },
-      rating: total > 0 ? up / total : 0,
+      total: totals,
+      rating: totalCount > 0 ? totals.up / totalCount : 0,
     }
   } catch {
     return {
+      total: { up: 0, down: 0 },
+      rating: 0,
+    }
+  }
+}
+
+async function readFilmStats(tmdbId: number) {
+  const db = await getDb()
+
+  if (!db) {
+    return {
+      tmdbId,
+      total: { up: 0, down: 0 },
+      rating: 0,
+    }
+  }
+
+  try {
+    const result = await db.execute({
+      sql: 'SELECT rating, COUNT(*) as count FROM feedback WHERE tmdb_id = ? GROUP BY rating',
+      args: [tmdbId],
+    })
+    const totals = { up: 0, down: 0 }
+
+    for (const row of result.rows) {
+      const rating = row.rating
+
+      if (rating === 'up' || rating === 'down') {
+        totals[rating] = toNumber(row.count)
+      }
+    }
+
+    const totalCount = totals.up + totals.down
+
+    return {
+      tmdbId,
+      total: totals,
+      rating: totalCount > 0 ? totals.up / totalCount : 0,
+    }
+  } catch {
+    return {
+      tmdbId,
       total: { up: 0, down: 0 },
       rating: 0,
     }
@@ -282,12 +240,24 @@ export default async function handler(request: Request) {
 
   if (request.method === 'GET') {
     const url = new URL(request.url)
+    const type = url.searchParams.get('type')
 
-    if (url.searchParams.get('type') !== 'stats') {
-      return jsonResponse({ error: 'Unsupported feedback query.' }, 400)
+    if (type === 'stats') {
+      return jsonResponse(await readAggregateStats())
     }
 
-    return jsonResponse(await readStats())
+    if (type === 'film') {
+      const rawTmdbId = url.searchParams.get('tmdbId')
+      const tmdbId = rawTmdbId ? Number(rawTmdbId) : NaN
+
+      if (!Number.isInteger(tmdbId) || tmdbId <= 0) {
+        return jsonResponse({ error: 'tmdbId must be a positive integer.' }, 400)
+      }
+
+      return jsonResponse(await readFilmStats(tmdbId))
+    }
+
+    return jsonResponse({ error: 'Unsupported feedback query.' }, 400)
   }
 
   if (request.method !== 'POST') {
@@ -302,16 +272,12 @@ export default async function handler(request: Request) {
     return jsonResponse({ error: 'Invalid JSON request body.' }, 400)
   }
 
-  if (!isFeedbackPayload(body)) {
+  if (!isFeedbackRequestBody(body)) {
     return jsonResponse({ error: 'Invalid feedback payload.' }, 400)
   }
 
   try {
-    const client = await getKvClient()
-
-    if (client) {
-      await writeFeedback(client, body)
-    }
+    await insertFeedback(body)
   } catch {
     // Feedback is best-effort and should not block the experience.
   }
