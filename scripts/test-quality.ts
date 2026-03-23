@@ -306,7 +306,7 @@ if (!varianceProfile) {
   throw new Error('Variance profile could not be resolved from the test set.')
 }
 
-const delayMs = 3000
+const delayMs = 8000
 
 function sleep(milliseconds: number) {
   return new Promise((resolve) => {
@@ -337,54 +337,128 @@ function getDecade(year: number) {
 }
 
 function normalizeTitle(title: string) {
-  return title.trim().toLowerCase()
+  return canonicalizeTitle(title)
+}
+
+function canonicalizeTitle(title: string) {
+  return title
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/&/g, ' and ')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ')
 }
 
 function normalizeGenre(genre: string) {
   return genre.trim().toLowerCase()
 }
 
-function containsNonAscii(value: string) {
-  return /[^\x00-\x7F]/.test(value)
-}
+const knownNonEnglishTitles = new Set(
+  [
+    'Oldboy',
+    'Parasite',
+    'Amélie',
+    'Cinema Paradiso',
+    'The Intouchables',
+    'Spirited Away',
+    'My Neighbor Totoro',
+    'Princess Mononoke',
+    'Crouching Tiger Hidden Dragon',
+    'Crouching Tiger, Hidden Dragon',
+    'In the Mood for Love',
+    'Taste of Cherry',
+    'A Brighter Summer Day',
+    'The Turin Horse',
+    'The Act of Killing',
+    'Battle Royale',
+    'A Tale of Two Sisters',
+    'The Chaser',
+    'Hard Boiled',
+    'Run Lola Run',
+    'Stalker',
+    'The Seventh Seal',
+    'The Lives of Others',
+    'Pather Panchali',
+    'Yi Yi',
+    'A Separation',
+    'City of God',
+    "Pan's Labyrinth",
+    'The Handmaiden',
+    'Rashomon',
+    'Seven Samurai',
+    'Ikiru',
+    'Tokyo Story',
+    'Persona',
+    'Wild Strawberries',
+    'The 400 Blows',
+    'Breathless',
+    '8½',
+    '8 1/2',
+    'Bicycle Thieves',
+    'La Dolce Vita',
+    'Roma',
+    'Amores Perros',
+    'Y Tu Mamá También',
+    'The Secret in Their Eyes',
+    'Talk to Her',
+    'All About My Mother',
+    'Volver',
+    'Cléo from 5 to 7',
+    'Solaris',
+    'Come and See',
+    'Andrei Rublev',
+    'The Mirror',
+    'Shoplifters',
+    'Departures',
+    'Grave of the Fireflies',
+    'Akira',
+    'Perfect Blue',
+    'Infernal Affairs',
+    'Chungking Express',
+    'Happy Together',
+    'Hero',
+    'House of Flying Daggers',
+    'Incendies',
+    'Caché',
+    'The White Ribbon',
+    'Ida',
+    'Cold War',
+    'The Leopard',
+    'Life is Beautiful',
+    'Ip Man',
+    'Train to Busan',
+    'Snowpiercer',
+    'The Host',
+    'Spring Summer Fall Winter and Spring',
+    'Spring, Summer, Fall, Winter... and Spring',
+    'Raise the Red Lantern',
+    'Farewell My Concubine',
+    'Dogtooth',
+    'The Lobster',
+  ].map(canonicalizeTitle),
+)
 
 function likelyNonEnglish(recommendation: Recommendation) {
-  const combined = `${recommendation.genre} ${recommendation.title} ${recommendation.why}`.toLowerCase()
-  const languageSignals = [
+  const whyText = recommendation.why.toLowerCase()
+  const fallbackSignals = [
     'subtitle',
+    'subtitles',
     'subtitled',
-    'non-english',
-    'foreign-language',
-    'foreign language',
-    'korean',
-    'japanese',
-    'french',
-    'spanish',
-    'mandarin',
-    'cantonese',
-    'taiwanese',
-    'iranian',
-    'persian',
-    'italian',
-    'german',
-    'hindi',
-    'bengali',
-    'senegal',
-    'hong kong',
-    'korea',
-    'japan',
-    'taiwan',
-    'iran',
-    'india',
-    'france',
-    'italy',
+    'language',
+    'country',
+    'foreign',
   ]
 
   return (
-    containsNonAscii(recommendation.title) ||
-    combined.includes('foreign') ||
-    languageSignals.some((signal) => combined.includes(signal))
+    knownNonEnglishTitles.has(canonicalizeTitle(recommendation.title)) ||
+    fallbackSignals.some((signal) => whyText.includes(signal))
   )
+}
+
+function isComedyGenre(genre: string) {
+  return /(comedy|comedic|humor|farce|satire)/i.test(genre)
 }
 
 function inferOverallStatus(checks: CheckResult[]): CheckStatus {
@@ -690,11 +764,14 @@ function evaluateSingleTest(
       label: `Must include genre (${test.validate.mustIncludeGenre})`,
       ...(hasCompleteSet
         ? (() => {
-            const matchingCount = genres.filter((genre) =>
-              genre.toLowerCase().includes(
-                test.validate.mustIncludeGenre!.toLowerCase(),
-              ),
-            ).length
+            const matchingCount =
+              test.validate.mustIncludeGenre?.toLowerCase() === 'comedy'
+                ? genres.filter((genre) => isComedyGenre(genre)).length
+                : genres.filter((genre) =>
+                    genre
+                      .toLowerCase()
+                      .includes(test.validate.mustIncludeGenre!.toLowerCase()),
+                  ).length
             return {
               status: matchingCount > 0 ? 'pass' : 'warn',
               detail: `${matchingCount}/5 ${test.validate.mustIncludeGenre.toLowerCase()} genres`,
@@ -713,9 +790,7 @@ function evaluateSingleTest(
       label: 'Comedy count',
       ...(hasCompleteSet
         ? (() => {
-            const comedyCount = genres.filter((genre) =>
-              genre.toLowerCase().includes('comedy'),
-            ).length
+            const comedyCount = genres.filter((genre) => isComedyGenre(genre)).length
             return {
               status: comedyCount >= test.validate.minComedyCount ? 'pass' : 'warn',
               detail: `${comedyCount}/5 comedy genres`,
