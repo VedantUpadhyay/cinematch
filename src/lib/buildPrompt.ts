@@ -9,6 +9,18 @@ type BuildPromptOptions = {
   strictSuffix?: string
 }
 
+function getCopingGuidance(profile: UserProfile) {
+  if (profile.copingStyle === 'lean-in') {
+    return `The user wants mood-congruent content. For their current mood (${profile.mood}), recommend films that validate, deepen, or provide catharsis for that emotional state. Do NOT recommend uplifting or escapist content.`
+  }
+
+  if (profile.copingStyle === 'shift-away') {
+    return `The user wants mood-incongruent content. For their current mood (${profile.mood}), recommend films that gently redirect toward a different emotional register. Avoid content that amplifies their current state.`
+  }
+
+  return `No explicit coping-style preference was provided for mood (${profile.mood}), so balance emotional validation with gentle regulation.`
+}
+
 function formatProfile(profile: UserProfile) {
   return [
     `- hedonic (${profile.hedonic}): higher means more hedonic/fun-seeking, lower means more eudaimonic/meaning-seeking`,
@@ -17,6 +29,7 @@ function formatProfile(profile: UserProfile) {
     `- literacy (${profile.literacy}): higher means more adventurous film literacy, lower means preference for accessible mainstream storytelling`,
     `- social (${profile.social}): higher means broad social/group watch context, lower means solitary/deeper personal viewing`,
     `- mood (${profile.mood})`,
+    `- copingStyle (${profile.copingStyle ?? 'none'})`,
   ].join('\n')
 }
 
@@ -36,6 +49,9 @@ export function buildPrompt(
     '',
     'User profile:',
     formatProfile(profile),
+    '',
+    'Mood-regulation guidance:',
+    getCopingGuidance(profile),
     '',
     'Return exactly 5 film recommendations.',
     'Output a JSON object with this exact top-level shape:',
@@ -63,6 +79,8 @@ export function buildPrompt(
     '- Each recommendation must be a real film, not a TV series or short explanation object.',
     '- The "why" field must mention concrete fit to specific axes, not just vague taste matching.',
     '- The "why" field must also mention whether the film matches, regulates, or shifts the current mood.',
+    '- The recommendation set must meaningfully change when copingStyle changes for the same mood.',
+    '- Treat copingStyle as a hard steering constraint, not a minor preference.',
     '- axisScores values must be numbers between 0 and 1.',
     '- Do not include markdown fences, prose preambles, or any extra keys.',
     options.strictSuffix ?? '',

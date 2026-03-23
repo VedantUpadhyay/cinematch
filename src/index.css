@@ -84,6 +84,10 @@ a:focus-visible {
   animation: fade-step-in 320ms ease-out both;
 }
 
+.expand-fade-panel {
+  animation: expand-fade-in 320ms ease-out both;
+}
+
 @keyframes fade-step-in {
   from {
     opacity: 0;
@@ -93,5 +97,17 @@ a:focus-visible {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes expand-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scaleY(0.97);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scaleY(1);
   }
 }

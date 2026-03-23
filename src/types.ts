@@ -1,5 +1,3 @@
-export type ProfileAxis = 'hedonic' | 'arousal' | 'moralFlex' | 'literacy' | 'social'
-
 export type AxisScores = {
   hedonic: number
   arousal: number
@@ -8,8 +6,13 @@ export type AxisScores = {
   social: number
 }
 
+export type ProfileAxis = keyof AxisScores
+
+export type CopingStyle = 'lean-in' | 'shift-away'
+
 export type UserProfile = AxisScores & {
   mood: string
+  copingStyle: CopingStyle | null
 }
 
 export type QuestionOption = {
@@ -19,7 +22,7 @@ export type QuestionOption = {
 }
 
 export type Question = {
-  axis: keyof Omit<UserProfile, 'mood'>
+  axis: keyof AxisScores
   label: string
   description: string
   research: string
@@ -31,6 +34,13 @@ export type MoodOption = {
   key: string
   emoji: string
   color: string
+}
+
+export type CopingOption = {
+  label: string
+  key: CopingStyle
+  emoji: string
+  description: string
 }
 
 export type Recommendation = {

@@ -20,6 +20,13 @@ function ResultsViewComponent({
   profile,
   recommendations,
 }: ResultsViewProps) {
+  const copingDescription =
+    profile.copingStyle === 'lean-in'
+      ? 'mood-congruent catharsis'
+      : profile.copingStyle === 'shift-away'
+        ? 'gentle mood redirection'
+        : 'balanced mood regulation'
+
   return (
     <div className="space-y-6">
       <section className="rounded-sm border border-[color:var(--cm-border)] bg-[color:var(--cm-panel)] p-6 sm:p-8">
@@ -33,6 +40,12 @@ function ResultsViewComponent({
           Each recommendation explains how the film fits your current balance of
           mood, stimulation, moral complexity, and viewing context.
         </p>
+        <footer className="mt-6 border-t border-[rgba(232,224,212,0.08)] pt-4">
+          <p className="[font-family:var(--cm-font-mono)] text-[0.72rem] uppercase tracking-[0.14em] text-[color:var(--cm-text-muted)]">
+            Model Steering: Five-axis profile, mood state, and coping style
+            ({copingDescription})
+          </p>
+        </footer>
       </section>
 
       <ProfileSummary profile={profile} />

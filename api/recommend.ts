@@ -56,6 +56,10 @@ function isNormalizedScore(value: unknown): value is number {
   return isFiniteNumber(value) && value >= 0 && value <= 1
 }
 
+function isCopingStyle(value: unknown): value is UserProfile['copingStyle'] {
+  return value === null || value === 'lean-in' || value === 'shift-away'
+}
+
 function isProfile(value: unknown): value is UserProfile {
   if (!isObject(value)) {
     return false
@@ -68,7 +72,8 @@ function isProfile(value: unknown): value is UserProfile {
     isNormalizedScore(value.literacy) &&
     isNormalizedScore(value.social) &&
     typeof value.mood === 'string' &&
-    value.mood.trim().length > 0
+    value.mood.trim().length > 0 &&
+    (!('copingStyle' in value) || isCopingStyle(value.copingStyle))
   )
 }
 

@@ -1,8 +1,14 @@
 import { startTransition, useCallback, useState } from 'react'
 import { getRecommendations } from '../lib/api'
-import type { ProfileAxis, Recommendation, UserProfile } from '../types'
+import type {
+  AxisScores,
+  CopingStyle,
+  ProfileAxis,
+  Recommendation,
+  UserProfile,
+} from '../types'
 
-type QuestionnaireAnswers = Partial<Omit<UserProfile, 'mood'>>
+type QuestionnaireAnswers = Partial<AxisScores>
 
 const profileAxes: ProfileAxis[] = [
   'hedonic',
@@ -15,8 +21,9 @@ const profileAxes: ProfileAxis[] = [
 function buildProfile(
   answers: QuestionnaireAnswers,
   mood: string | null,
+  copingStyle: CopingStyle | null,
 ): UserProfile | null {
-  if (!mood) {
+  if (!mood || !copingStyle) {
     return null
   }
 
@@ -33,6 +40,7 @@ function buildProfile(
     literacy: answers.literacy as number,
     social: answers.social as number,
     mood,
+    copingStyle,
   }
 }
 
@@ -48,6 +56,7 @@ export function useQuestionnaire() {
   const [step, setStep] = useState(0)
   const [answers, setAnswers] = useState<QuestionnaireAnswers>({})
   const [mood, setMood] = useState<string | null>(null)
+  const [copingStyle, setCopingStyle] = useState<CopingStyle | null>(null)
   const [recommendations, setRecommendations] = useState<Recommendation[] | null>(
     null,
   )
@@ -89,14 +98,15 @@ export function useQuestionnaire() {
   }, [])
 
   const handleMood = useCallback(
-    async (key: string) => {
-      const profile = buildProfile(answers, key)
+    async (key: string, nextCopingStyle: CopingStyle) => {
+      const profile = buildProfile(answers, key, nextCopingStyle)
 
       setMood(key)
+      setCopingStyle(nextCopingStyle)
 
       if (!profile) {
         setStep(5)
-        setError('Complete all five questions before selecting a mood.')
+        setError('Complete all five questions before selecting mood regulation.')
         return
       }
 
@@ -106,33 +116,35 @@ export function useQuestionnaire() {
   )
 
   const retryRecommendations = useCallback(async () => {
-    const profile = buildProfile(answers, mood)
+    const profile = buildProfile(answers, mood, copingStyle)
 
     if (!profile) {
-      setError('Complete all five questions before retrying.')
+      setError('Complete the mood and coping-style step before retrying.')
       return
     }
 
     await requestRecommendations(profile)
-  }, [answers, mood, requestRecommendations])
+  }, [answers, copingStyle, mood, requestRecommendations])
 
   const reset = useCallback(() => {
     setStep(0)
     setAnswers({})
     setMood(null)
+    setCopingStyle(null)
     setRecommendations(null)
     setError(null)
     setLoading(false)
   }, [])
 
   const getProfile = useCallback(() => {
-    return buildProfile(answers, mood)
-  }, [answers, mood])
+    return buildProfile(answers, mood, copingStyle)
+  }, [answers, copingStyle, mood])
 
   return {
     step,
     answers,
     mood,
+    copingStyle,
     recommendations,
     error,
     loading,

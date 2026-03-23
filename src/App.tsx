@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, type ReactNode } from 'react'
 import Layout from './components/Layout'
 import MoodSelector from './components/MoodSelector'
 import QuestionCard from './components/QuestionCard'
@@ -12,7 +12,7 @@ type MessageCardProps = {
   eyebrow: string
   title: string
   body: string
-  actions?: React.ReactNode
+  actions?: ReactNode
 }
 
 function MessageCard({ eyebrow, title, body, actions }: MessageCardProps) {
@@ -96,7 +96,7 @@ function ResultsFallback({
       <MessageCard
         eyebrow="Results"
         title="Preparing the results view"
-        body={`Loaded ${recommendations.length} recommendations for your ${profile.mood} profile.`}
+        body={`Loaded ${recommendations.length} recommendations for your ${profile.mood} profile with ${profile.copingStyle ?? 'balanced'} mood regulation.`}
       />
     </div>
   )
