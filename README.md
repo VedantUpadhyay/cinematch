@@ -56,24 +56,28 @@ The coping style question produces meaningfully different recommendations:
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                      Frontend (React)                      │
-│                                                             │
-│  ┌──────────────┐  ┌─────────────────────┐  ┌────────────┐ │
-│  │ User Profile │→ │ Scoring Engine      │→ │ LLM        │→│
-│  │ (5 axes +    │  │ (math, ~2ms)        │  │ explanations│ │
-│  │ mood + cope) │  │ weighted distance + │  │ only        │ │
-│  │              │  │ mood affinity + MMR │  │             │ │
-│  └──────────────┘  └─────────────────────┘  └────────────┘ │
-│                                                             │
-│                             ↓                               │
-│                    Results View / Display                   │
-└─────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│                           Frontend (React)                              │
+│                                                                          │
+│  ┌──────────────┐  ┌─────────────────────┐  ┌──────────────┐             │
+│  │ User Profile │→ │ Scoring Engine      │→ │ LLM          │→ Display    │
+│  │ (5 axes +    │  │ (math, ~2ms)        │  │ explanations │             │
+│  │ mood + cope) │  │ weighted distance + │  │ only         │             │
+│  │              │  │ mood affinity + MMR │  │              │             │
+│  └──────────────┘  └─────────────────────┘  └──────────────┘             │
+│                                                              │           │
+│                                                              │ 👍/👎 per │
+│                                                              │ recommendation
+│                                                              ▼           │
+│                                                   Turso (SQLite at edge) │
+└──────────────────────────────────────────────────────────────────────────┘
 ```
 
-The major architectural decision now is: **film selection is deterministic, explanations are generative.** The recommendation engine scores a bundled corpus of 500 pre-tagged films using weighted Euclidean distance on the 5 axes, combines that with mood×coping affinity, and then applies MMR (Maximal Marginal Relevance) to ensure the final 5 are diverse across genre, decade, and region.
+The major architectural decision now is: **film selection is deterministic, explanations are generative.** CineMatch uses an Option B hybrid architecture: a bundled corpus of 500 pre-tagged, cross-validated films is scored locally with weighted Euclidean distance on the 5 axes, combined with mood×coping affinity, and diversified with MMR (Maximal Marginal Relevance) so the final 5 span genre, decade, and region.
 
 The LLM is still useful, but its role is narrower and safer: once the math engine has already selected 5 real TMDB-backed films, GPT-OSS writes the taglines and "why this film" explanations. That removes hallucinated titles from the critical path, makes selection effectively instant, and gives the app a graceful fallback path when the explanation layer is rate-limited.
+
+Users can rate each recommendation with thumbs up/down. Feedback is stored anonymously in Turso (libSQL/SQLite replicated to edge locations) for quality analysis. No authentication required — ratings are tied to anonymous session IDs.
 
 ---
 
@@ -84,6 +88,7 @@ The LLM is still useful, but its role is narrower and safer: once the math engin
 - **Scoring Engine**: weighted Euclidean distance + mood affinity + MMR diversification
 - **Film Corpus**: 500 pre-tagged, cross-validated films bundled into the app at build time
 - **LLM**: OpenAI GPT-OSS-120B via Groq for explanation generation only
+- **Feedback Storage**: Turso (libSQL — SQLite at the edge, 9GB free tier)
 - **Deployment**: Vercel
 
 ---
@@ -115,6 +120,8 @@ pnpm dlx vercel dev --local --listen 127.0.0.1:3000 --yes
 ```
 cinematch/
 ├── api/
+│   ├── db-init.ts              # One-time Turso schema initializer
+│   ├── feedback.ts             # Anonymous thumbs up/down ingestion + stats
 │   └── recommend.ts            # Math-first selector + explanation proxy
 ├── src/
 │   ├── components/
@@ -129,10 +136,13 @@ cinematch/
 │   │   ├── questions.ts        # 5 questions with research citations
 │   │   └── moods.ts            # 6 moods + 2 coping styles
 │   ├── hooks/
+│   │   ├── useFeedback.ts      # Anonymous per-session feedback state
 │   │   └── useQuestionnaire.ts # Questionnaire state machine
 │   └── lib/
 │       ├── scoringEngine.ts    # Weighted matching + MMR film selection
 │       ├── buildPrompt.ts      # Explanation-only prompt for the selected 5 films
+│       ├── db.ts               # Turso client for edge function feedback storage
+│       ├── utils.ts            # Profile hashing utility
 │       └── api.ts              # Client fetch to /api/recommend
 └── AGENTS.md                   # Codex agent instructions
 ```
@@ -163,6 +173,26 @@ Prompt engineering is now scoped to the explanation layer only. Once 5 films are
 
 If the LLM call fails, the API still returns the same 5 films with generic fallback copy. Selection never depends on provider uptime.
 
+## Feedback System
+
+CineMatch includes an anonymous feedback loop: after recommendations are shown, users can rate each film with a thumbs up or thumbs down. The frontend generates an anonymous session ID for the current page load, and the edge function stores feedback in Turso without requiring accounts, logins, or browser persistence.
+
+Turso was chosen for pragmatic MVP reasons. Its libSQL/SQLite model is simple, edge-friendly, and generous on the free tier: 9GB is materially larger than the old 30MB Vercel KV limit and the 512MB ceiling common on entry MongoDB Atlas tiers, while still giving HTTP-based, edge-safe access from Vercel Edge Functions with sub-10ms in-region latency.
+
+Each feedback record captures:
+- session ID
+- film identity (`tmdb_id`, title, year)
+- rating (`up` or `down`)
+- full profile context: the 5 axes plus mood and coping style
+- profile hash for grouping repeated profile shapes
+
+That feedback layer enables:
+- per-axis quality analysis, such as whether high-arousal profiles respond better to the current weighting model
+- per-film quality tracking, so over-performing and under-performing titles become visible
+- future scoring-weight optimization from real user behavior instead of prompt intuition alone
+
+Feedback is best-effort by design. If Turso is unavailable, the recommendation flow continues normally and the user never sees an error just because analytics storage failed.
+
 ---
 
 ## What I Learned
@@ -174,6 +204,8 @@ If the LLM call fails, the API still returns the same 5 films with generic fallb
 **Cross-validation matters when you turn taste into numbers.** Reconciling GPT-5.4 and Gemini 3 scores forced the project to confront disagreements explicitly instead of trusting a single model’s tagging priors.
 
 **Explainability still matters, but it is now decoupled from selection.** The system can select robustly even if the explanation model is down, which is a much better reliability boundary.
+
+**Storage choice matters less than you think at MVP scale.** Turso's 9GB free SQLite handles millions of feedback records. The decision was driven by latency (edge replication) and free tier generosity, not by database paradigm. Don't over-architect storage for a product that hasn't proven it has users yet.
 
 ---
 
