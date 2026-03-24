@@ -73,7 +73,7 @@ type GroqMessage = {
   content: string
 }
 
-type ModelRecommendation = Omit<Recommendation, 'tmdbId'>
+type ModelRecommendation = Omit<Recommendation, 'tmdbId' | 'tier'>
 
 class ProviderResponseError extends Error {}
 
@@ -181,6 +181,7 @@ function buildFallbackRecommendations(
 
   return selectedFilms.map((film) => ({
     tmdbId: film.tmdb_id,
+    tier: film.tier,
     title: film.title,
     year: film.year,
     genre: film.genres[0] ?? 'Drama',
@@ -222,6 +223,7 @@ function parseRecommendations(
 
     return {
       tmdbId: matchedFilm.tmdb_id,
+      tier: matchedFilm.tier,
       title: matchedFilm.title,
       year: matchedFilm.year,
       genre: matchedFilm.genres[0] ?? recommendation.genre,

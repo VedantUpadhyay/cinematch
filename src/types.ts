@@ -46,6 +46,7 @@ export type CopingOption = {
 
 export type Recommendation = {
   tmdbId: number
+  tier?: number
   title: string
   year: number
   genre: string
