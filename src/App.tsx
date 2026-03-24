@@ -140,7 +140,11 @@ function App() {
           />
         }
       >
-        <ResultsView profile={profile} recommendations={recommendations} />
+        <ResultsView
+          onReset={reset}
+          profile={profile}
+          recommendations={recommendations}
+        />
       </Suspense>
     )
   }
