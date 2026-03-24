@@ -1,4 +1,5 @@
-import { createClient, type Client } from '@libsql/client/web'
+import type { Client } from '@libsql/client'
+import { createClient } from '@libsql/client/web'
 
 const localEnvPaths = ['.vercel/.env.development.local', '.env.local']
 
@@ -107,4 +108,3 @@ export async function getDb(): Promise<Client | null> {
   localDb = createDbClient(url, authToken)
   return localDb
 }
-
