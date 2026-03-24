@@ -26,6 +26,7 @@ export interface ScoredFilm extends TaggedFilm {
   axisDistance: number
   moodAffinity: number
   diversityBonus: number
+  tier: number
 }
 
 type RankedFilm = ScoredFilm & {
@@ -120,6 +121,7 @@ function scoreFilm(film: TaggedFilm, profile: UserProfile): ScoredFilm {
     axisDistance,
     moodAffinity,
     diversityBonus: 0,
+    tier: 0,
   }
 }
 
@@ -380,6 +382,9 @@ export function getTopFilms(profile: UserProfile): ScoredFilm[] {
   const selected = sampleTieredSelection(candidates)
 
   return selected
-    .map((entry) => entry.film)
+    .map((entry) => ({
+      ...entry.film,
+      tier: entry.sourceTier,
+    }))
     .sort((left, right) => right.matchScore - left.matchScore)
 }
